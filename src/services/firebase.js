@@ -31,14 +31,20 @@ import {
 } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAyjYY2CMTHswNwjNWCUDGI4LoTIjBz6aY",
-  authDomain: "taskmanager-f8d95.firebaseapp.com",
-  projectId: "taskmanager-f8d95",
-  storageBucket: "taskmanager-f8d95.firebasestorage.app",
-  messagingSenderId: "790982659305",
-  appId: "1:790982659305:web:e5fec9a73040082dc93478",
-  measurementId: "G-ECNW2SK1M6"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
+
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  throw new Error(
+    "Thiếu biến môi trường Firebase. Tạo file .env từ .env.example và điền VITE_FIREBASE_*."
+  );
+}
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
