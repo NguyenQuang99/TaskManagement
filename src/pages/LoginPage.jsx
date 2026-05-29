@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "react-router-dom"
 import { login as signIn, loginWithGoogle } from "../services/firebase"
-import { currentUserProfileQueryKeyRoot } from "../hooks/useCurrentUserProfile.js"
+import { prepareQueriesAfterLogin } from "../lib/authQueryCache.js"
 
 export default function LoginPage() {
 
@@ -20,7 +20,7 @@ export default function LoginPage() {
     setShowEmptyError(false);
     try {
       await signIn(email, password);
-      await queryClient.invalidateQueries({ queryKey: currentUserProfileQueryKeyRoot });
+      await prepareQueriesAfterLogin(queryClient);
       navigate("/kanban");
     } catch (err) {
       console.error(err.code, err.message);
@@ -29,7 +29,7 @@ export default function LoginPage() {
   const handleLoginWidthGoogle = async () => {
     try {
       await loginWithGoogle();
-      await queryClient.invalidateQueries({ queryKey: currentUserProfileQueryKeyRoot });
+      await prepareQueriesAfterLogin(queryClient);
       navigate("/kanban");
     } catch (err) {
       console.error(err.code, err.message);

@@ -129,7 +129,7 @@ export default function CustomFiltersPanel({
     );
   }, [users]);
 
-  const assigneeListLoading = usersLoading || kanbanInitialPending;
+  const assigneeListLoading = usersLoading;
 
   const chevronClass = (open) =>
     `inline-block text-cyan-600 transition-transform duration-200 ${open ? "" : "-rotate-90"}`;

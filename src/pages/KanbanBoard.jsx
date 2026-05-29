@@ -117,26 +117,61 @@ function SortableTaskItem({ id, task, avatarClass, onTaskClick, users }) {
   );
 }
 
-function EmptyDropZone({ columnKey }) {
+function ColumnEmptyState({ columnKey, variant = "default" }) {
   const { setNodeRef, isOver } = useDroppable({ id: emptyZoneDroppableId(columnKey) });
+  const isFiltered = variant === "filtered";
+  const message = isFiltered ? "No tasks match filters" : "No tasks yet.";
 
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-lg border border-dashed bg-white/70 p-3 text-xs transition ${isOver ? "border-indigo-400 text-indigo-600" : "border-slate-300 text-slate-500"
-        }`}
+      className={`rounded-lg border border-dashed p-3 text-xs transition ${
+        isOver
+          ? "border-indigo-400 bg-white/70 text-indigo-600"
+          : isFiltered
+            ? "border-amber-200 bg-amber-50/80 text-amber-800"
+            : "border-slate-300 bg-white/70 text-slate-500"
+      }`}
     >
-      No tasks yet.
+      {message}
     </div>
   );
 }
 
-function renderTaskList(tasks, columnKey, onTaskClick, users) {
+const KANBAN_COLUMN_SKELETON_ROWS = {
+  todo: 3,
+  inProgress: 4,
+  review: 4,
+  done: 5,
+};
+
+function KanbanColumnSkeleton({ rows = 4 }) {
+  return (
+    <div className="flex flex-col gap-2.5" role="status" aria-live="polite" aria-label="Loading tasks">
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          className="animate-pulse rounded-lg border border-slate-200/80 bg-white/90 p-3 shadow-sm"
+        >
+          <div className="h-3.5 w-3/4 rounded bg-slate-200" />
+          <div className="mt-2 h-2.5 w-full rounded bg-slate-100" />
+          <div className="mt-1.5 h-2.5 w-5/6 rounded bg-slate-100" />
+          <div className="mt-3 flex items-center gap-2">
+            <div className="h-6 w-6 shrink-0 rounded-full bg-slate-200" />
+            <div className="h-2 w-14 rounded bg-slate-100" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderTaskList(tasks, columnKey, onTaskClick, users, emptyVariant = "default") {
   const ids = tasks.map((task, index) => getTaskDndId(task, columnKey, index));
   return (
     <SortableContext items={ids} strategy={verticalListSortingStrategy}>
       {tasks.length === 0 ? (
-        <EmptyDropZone columnKey={columnKey} />
+        <ColumnEmptyState columnKey={columnKey} variant={emptyVariant} />
       ) : (
         tasks.map((task, index) => {
           const id = getTaskDndId(task, columnKey, index);
@@ -156,6 +191,22 @@ function renderTaskList(tasks, columnKey, onTaskClick, users) {
   );
 }
 
+function renderColumnBody(
+  tasks,
+  columnKey,
+  onTaskClick,
+  users,
+  kanbanInitialPending,
+  emptyVariant = "default"
+) {
+  if (kanbanInitialPending) {
+    return (
+      <KanbanColumnSkeleton rows={KANBAN_COLUMN_SKELETON_ROWS[columnKey] ?? 4} />
+    );
+  }
+  return renderTaskList(tasks, columnKey, onTaskClick, users, emptyVariant);
+}
+
 export default function KanbanBoard() {
   const queryClient = useQueryClient();
   const {
@@ -165,7 +216,9 @@ export default function KanbanBoard() {
     loadingMoreByColumn,
     loadMoreColumn,
     refreshBoardTasks,
+    retryKanbanInitialLoad,
     kanbanInitialPending,
+    kanbanInitialRetrying,
     kanbanInitialLoadFailed,
   } = useKanbanTasks();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -213,14 +266,21 @@ export default function KanbanBoard() {
   const { setNodeRef: setReviewDropRef } = useDroppable({ id: columnDroppableId("review") });
   const { setNodeRef: setDoneDropRef } = useDroppable({ id: columnDroppableId("done") });
 
-  const { activeId, handleDragStart, handleDragOver, handleDragEnd, findTaskById } = useKanbanDnD(
+  const {
+    activeId,
+    handleDragStart,
+    handleDragOver,
+    handleDragEnd,
+    handleDragCancel,
+    findTaskById,
+  } = useKanbanDnD(
     tasksByColumn,
     setTasksByColumn,
     refreshBoardTasks,
     syncKanbanTaskQueries
   );
 
-  const { filteredTasksByColumn } = useTaskSearch(tasksByColumn);
+  const { filteredTasksByColumn, queryNormalized } = useTaskSearch(tasksByColumn);
 
   const selectedAssigneeKeys = useMemo(
     () => new Set(assigneeKeysFromSearchParams),
@@ -276,6 +336,37 @@ export default function KanbanBoard() {
     }),
     [displayTasksByColumn]
   );
+
+  const columnTaskCount = (count) => (kanbanInitialPending ? "—" : count);
+
+  const hasActiveFilters =
+    queryNormalized.length > 0 || selectedAssigneeKeys.size > 0;
+
+  const getColumnEmptyVariant = useCallback(
+    (columnKey) => {
+      if (kanbanInitialPending || kanbanInitialLoadFailed) return "default";
+      const displayLen = displayTasksByColumn[columnKey]?.length ?? 0;
+      if (displayLen > 0) return "default";
+      const sourceLen = tasksByColumn[columnKey]?.length ?? 0;
+      if (hasActiveFilters && sourceLen > 0) return "filtered";
+      return "default";
+    },
+    [
+      displayTasksByColumn,
+      hasActiveFilters,
+      kanbanInitialLoadFailed,
+      kanbanInitialPending,
+      tasksByColumn,
+    ]
+  );
+
+  const handleKanbanLoadRetry = useCallback(async () => {
+    try {
+      await retryKanbanInitialLoad();
+    } catch (err) {
+      console.error("Kanban initial load retry failed:", err);
+    }
+  }, [retryKanbanInitialLoad]);
 
   const activeTask = activeId ? findTaskById(activeId) : null;
 
@@ -370,11 +461,35 @@ export default function KanbanBoard() {
               />
             </div>
           ) : null}
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} >
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+            {kanbanInitialLoadFailed ? (
+              <div
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                role="alert"
+              >
+                <p className="font-medium">Could not load the task board. Please try again.</p>
+                <button
+                  type="button"
+                  onClick={handleKanbanLoadRetry}
+                  disabled={kanbanInitialRetrying}
+                  className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {kanbanInitialRetrying ? "Retrying…" : "Retry"}
+                </button>
+              </div>
+            ) : null}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
             <div className="flex min-h-0 flex-1 flex-col gap-4 sm:flex-row sm:items-stretch sm:gap-4">
               <Column
               title="Todo"
-              taskCount={counts.todo}
+              taskCount={columnTaskCount(counts.todo)}
               columnBgClass="bg-[#3b82f6]/15"
               headerTextClass="text-slate-800"
               badgeBgClass="bg-[#3b82f6]/20"
@@ -386,12 +501,19 @@ export default function KanbanBoard() {
               loadingMoreTasks={loadingMoreByColumn.todo}
               onLoadMoreTasks={() => loadMoreColumn("todo")}
             >
-              {renderTaskList(displayTasksByColumn.todo, "todo", handleOpenTaskForEdit, users)}
+              {renderColumnBody(
+                displayTasksByColumn.todo,
+                "todo",
+                handleOpenTaskForEdit,
+                users,
+                kanbanInitialPending,
+                getColumnEmptyVariant("todo")
+              )}
             </Column>
 
               <Column
               title="In Progress"
-              taskCount={counts.inProgress}
+              taskCount={columnTaskCount(counts.inProgress)}
               columnBgClass="bg-[#22c55e]/15"
               headerTextClass="text-slate-800"
               badgeBgClass="bg-[#22c55e]/20"
@@ -402,12 +524,19 @@ export default function KanbanBoard() {
               loadingMoreTasks={loadingMoreByColumn.inProgress}
               onLoadMoreTasks={() => loadMoreColumn("inProgress")}
             >
-              {renderTaskList(displayTasksByColumn.inProgress, "inProgress", handleOpenTaskForEdit, users)}
+              {renderColumnBody(
+                displayTasksByColumn.inProgress,
+                "inProgress",
+                handleOpenTaskForEdit,
+                users,
+                kanbanInitialPending,
+                getColumnEmptyVariant("inProgress")
+              )}
             </Column>
 
               <Column
               title="Review"
-              taskCount={counts.review}
+              taskCount={columnTaskCount(counts.review)}
               columnBgClass="bg-[#cfd350]"
               headerTextClass="text-slate-900"
               badgeBgClass="bg-[#cfd350]/80"
@@ -418,12 +547,19 @@ export default function KanbanBoard() {
               loadingMoreTasks={loadingMoreByColumn.review}
               onLoadMoreTasks={() => loadMoreColumn("review")}
             >
-              {renderTaskList(displayTasksByColumn.review, "review", handleOpenTaskForEdit, users)}
+              {renderColumnBody(
+                displayTasksByColumn.review,
+                "review",
+                handleOpenTaskForEdit,
+                users,
+                kanbanInitialPending,
+                getColumnEmptyVariant("review")
+              )}
             </Column>
 
               <Column
               title="Done"
-              taskCount={counts.done}
+              taskCount={columnTaskCount(counts.done)}
               columnBgClass="bg-[#70728f]"
               headerTextClass="text-white"
               badgeBgClass="bg-[#70728f]/80"
@@ -434,7 +570,14 @@ export default function KanbanBoard() {
               loadingMoreTasks={loadingMoreByColumn.done}
               onLoadMoreTasks={() => loadMoreColumn("done")}
             >
-              {renderTaskList(displayTasksByColumn.done, "done", handleOpenTaskForEdit, users)}
+              {renderColumnBody(
+                displayTasksByColumn.done,
+                "done",
+                handleOpenTaskForEdit,
+                users,
+                kanbanInitialPending,
+                getColumnEmptyVariant("done")
+              )}
               </Column>
             </div>
             <DragOverlay>
@@ -451,6 +594,7 @@ export default function KanbanBoard() {
               ) : null}
             </DragOverlay>
           </DndContext>
+          </div>
         </div>
       </div>
       {taskModal ? (

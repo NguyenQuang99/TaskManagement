@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useEffect, useRef, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getTasksByColumn, getTasksByColumnPage } from "../services/firebase.js";
+import { auth, getTasksByColumn, getTasksByColumnPage } from "../services/firebase.js";
 import {
   COLUMN_KEYS,
   COLUMN_TO_FIREBASE,
@@ -8,7 +9,7 @@ import {
 } from "./useKanbanDnD.js";
 
 export const kanbanInitialLoadQueryKeyRoot = ["kanbanTasks", "initialLoad"];
-const kanbanRefreshQueryKeyRoot = ["kanbanTasks", "refreshAll"];
+export const kanbanRefreshQueryKeyRoot = ["kanbanTasks", "refreshAll"];
 
 function initialColumnPagination() {
   return COLUMN_KEYS.reduce((acc, key) => {
@@ -47,21 +48,83 @@ async function fetchAllColumnsFull() {
   return { todo, inProgress, review, done };
 }
 
+/** Dùng cho useQuery board + prefetch sau login. */
+export async function fetchKanbanInitialLoad() {
+  try {
+    const paged = await fetchPagedFirstLoadByColumn();
+    return { mode: "paged", payload: paged };
+  } catch (error) {
+    console.error("Paged task load failed, falling back to full fetch:", error);
+    const full = await fetchAllColumnsFull();
+    return { mode: "full", payload: full };
+  }
+}
+
+const EMPTY_TASKS_BY_COLUMN = {
+  todo: [],
+  inProgress: [],
+  review: [],
+  done: [],
+};
+
+/** Query key + options theo uid — tránh cache kanban dùng chung giữa user A/B. */
+export function getKanbanInitialLoadQueryOptions(authUid) {
+  return {
+    queryKey: [...kanbanInitialLoadQueryKeyRoot, authUid || "anonymous"],
+    queryFn: fetchKanbanInitialLoad,
+    staleTime: 30 * 1000,
+    enabled: !!authUid,
+  };
+}
+
+function resetKanbanLocalBoardState(setters) {
+  const {
+    setTasksByColumn,
+    setColumnPagination,
+    columnPaginationRef,
+    loadingMoreRef,
+    setLoadingMoreByColumn,
+  } = setters;
+  setTasksByColumn({ ...EMPTY_TASKS_BY_COLUMN });
+  const emptyPag = initialColumnPagination();
+  columnPaginationRef.current = emptyPag;
+  setColumnPagination(emptyPag);
+  loadingMoreRef.current = initialLoadingMoreByColumn();
+  setLoadingMoreByColumn(initialLoadingMoreByColumn());
+}
+
 /**
  * Paged first load per column, load-more, and full refresh for the Kanban board.
  */
 export function useKanbanTasks() {
   const queryClient = useQueryClient();
-  const [tasksByColumn, setTasksByColumn] = useState({
-    todo: [],
-    inProgress: [],
-    review: [],
-    done: [],
-  });
+  const [authUid, setAuthUid] = useState(() => auth.currentUser?.uid ?? "");
+  const [tasksByColumn, setTasksByColumn] = useState(() => ({ ...EMPTY_TASKS_BY_COLUMN }));
   const [columnPagination, setColumnPagination] = useState(() => initialColumnPagination());
   const columnPaginationRef = useRef(initialColumnPagination());
   const loadingMoreRef = useRef(initialLoadingMoreByColumn());
   const [loadingMoreByColumn, setLoadingMoreByColumn] = useState(() => initialLoadingMoreByColumn());
+  const [hasAppliedInitialLoad, setHasAppliedInitialLoad] = useState(false);
+
+  const prevAuthUidRef = useRef(authUid);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (u) => setAuthUid(u?.uid ?? ""));
+  }, []);
+
+  /** Chỉ reset khi đổi user — không xóa board sau lần sync query đầu tiên cùng uid. */
+  useEffect(() => {
+    if (prevAuthUidRef.current === authUid) return;
+    prevAuthUidRef.current = authUid;
+    setHasAppliedInitialLoad(false);
+    resetKanbanLocalBoardState({
+      setTasksByColumn,
+      setColumnPagination,
+      columnPaginationRef,
+      loadingMoreRef,
+      setLoadingMoreByColumn,
+    });
+  }, [authUid]);
 
   const applyPagedLoad = useCallback((results) => {
     const nextTasks = {};
@@ -96,22 +159,20 @@ export function useKanbanTasks() {
   const {
     data: initialLoadData,
     isError: initialLoadFailed,
-    isPending: kanbanInitialPending,
+    isPending: kanbanQueryPending,
+    isFetching: kanbanInitialFetching,
+    refetch: refetchKanbanInitialLoad,
   } = useQuery({
-    queryKey: kanbanInitialLoadQueryKeyRoot,
-    queryFn: async () => {
-      try {
-        const paged = await fetchPagedFirstLoadByColumn();
-        return { mode: "paged", payload: paged };
-      } catch (error) {
-        console.error("Paged task load failed, falling back to full fetch:", error);
-        const full = await fetchAllColumnsFull();
-        return { mode: "full", payload: full };
-      }
-    },
-    staleTime: 30 * 1000,
+    ...getKanbanInitialLoadQueryOptions(authUid),
     refetchOnWindowFocus: false,
   });
+
+  const kanbanInitialRetrying = kanbanInitialFetching && !kanbanQueryPending;
+
+  /** Query đang fetch hoặc chưa sync query → tasksByColumn (tránh list rỗng im lặng). */
+  const kanbanInitialPending =
+    kanbanQueryPending ||
+    (Boolean(authUid) && !initialLoadFailed && !hasAppliedInitialLoad);
 
   useLayoutEffect(() => {
     if (!initialLoadData) return;
@@ -120,10 +181,12 @@ export function useKanbanTasks() {
     } else {
       applyFullLoad(initialLoadData.payload);
     }
+    setHasAppliedInitialLoad(true);
   }, [initialLoadData, applyPagedLoad, applyFullLoad]);
 
   useEffect(() => {
     if (!initialLoadFailed) return;
+    setHasAppliedInitialLoad(false);
     const emptyPag = COLUMN_KEYS.reduce((acc, key) => {
       acc[key] = { cursor: null, hasMore: false };
       return acc;
@@ -137,6 +200,11 @@ export function useKanbanTasks() {
       done: [],
     });
   }, [initialLoadFailed]);
+
+  const retryKanbanInitialLoad = useCallback(async () => {
+    setHasAppliedInitialLoad(false);
+    await refetchKanbanInitialLoad();
+  }, [refetchKanbanInitialLoad]);
 
   const refreshBoardTasks = useCallback(async () => {
     try {
@@ -193,7 +261,9 @@ export function useKanbanTasks() {
     loadingMoreByColumn,
     loadMoreColumn,
     refreshBoardTasks,
+    retryKanbanInitialLoad,
     kanbanInitialPending,
+    kanbanInitialRetrying,
     kanbanInitialLoadFailed: initialLoadFailed,
   };
 }

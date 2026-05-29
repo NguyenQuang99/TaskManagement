@@ -3,10 +3,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "react-router-dom"
 import ConfirmLogoutPopup from "./ConfirmLogoutPopup.jsx"
 import { logout } from "../services/firebase.js"
-import {
-  currentUserProfileQueryKeyRoot,
-  useCurrentUserProfile,
-} from "../hooks/useCurrentUserProfile.js"
+import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile.js"
+import { clearAuthSessionQueries } from "../lib/authQueryCache.js"
 
 export default function UserMenuPopup() {
   const navigate = useNavigate()
@@ -22,7 +20,7 @@ export default function UserMenuPopup() {
           onOk={async () => {
             try {
               await logout()
-              queryClient.removeQueries({ queryKey: currentUserProfileQueryKeyRoot })
+              clearAuthSessionQueries(queryClient)
             } finally {
               setConfirmLogoutOpen(false)
               navigate("/")

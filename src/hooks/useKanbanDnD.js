@@ -1,9 +1,18 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { arrayMove } from "@dnd-kit/sortable";
-import { updateTask } from "../services/firebase.js";
-import { usePersistKanbanMutation } from "./useTaskMutations.js";
+import {
+  getKanbanDragPersistUpdates,
+  usePersistKanbanMutation,
+} from "./useTaskMutations.js";
 
 export const COLUMN_KEYS = ["todo", "inProgress", "review", "done"];
+
+const COLUMN_STATUS = {
+  todo: "todo",
+  inProgress: "in-progress",
+  review: "review",
+  done: "done",
+};
 
 /** Gộp task các cột (dùng cho đếm assignee / thống kê từ state board). */
 export function flattenTasksByColumn(tasksByColumn) {
@@ -16,6 +25,12 @@ export const COLUMN_TO_FIREBASE = {
   inProgress: "column_02",
   review: "column_03",
   done: "column_04",
+};
+
+const KANBAN_PERSIST_MAPS = {
+  columnKeys: COLUMN_KEYS,
+  columnToFirebase: COLUMN_TO_FIREBASE,
+  columnStatus: COLUMN_STATUS,
 };
 
 export function getTaskDndId(task, columnKey, index) {
@@ -136,31 +151,70 @@ function resolveColumnFromOverId(overId, findContainerByTaskId) {
   return findContainerByTaskId(overId);
 }
 
-/**
- * @param {string} columnKey
- * @param {Array<Record<string, unknown>>} tasks
- */
-async function persistColumnOrders(columnKey, tasks) {
-  const columnId = COLUMN_TO_FIREBASE[columnKey];
-  const statusMap = {
-    todo: "todo",
-    inProgress: "in-progress",
-    review: "review",
-    done: "done",
-  };
-  const status = statusMap[columnKey] ?? columnKey;
+function cloneKanbanColumnsState(state) {
+  const sanitized = sanitizeKanbanTaskColumnsState(state);
+  if (typeof structuredClone === "function") {
+    return structuredClone(sanitized);
+  }
+  return JSON.parse(JSON.stringify(sanitized));
+}
 
-  await Promise.all(
-    tasks.map((t, index) => {
-      if (!t?.id) return Promise.resolve();
-      return updateTask(t.id, {
-        columnId,
-        status,
-        order: String(index),
-        userId: t.userId,
-      });
-    })
-  );
+/**
+ * @param {Record<string, unknown[]>} prev
+ * @param {string} activeIdValue
+ * @param {string} overId
+ * @param {{ allowSameColumn?: boolean }} [options]
+ * @returns {Record<string, unknown[]> | null}
+ */
+function applyDragMove(prev, activeIdValue, overId, { allowSameColumn = true } = {}) {
+  const resolveContainer = (tid) => findContainerByTaskIdInState(tid, prev);
+  const sourceColumn = resolveContainer(activeIdValue);
+  const targetColumn = resolveColumnFromOverId(overId, resolveContainer);
+
+  if (!sourceColumn || !targetColumn) return null;
+
+  if (sourceColumn !== targetColumn) {
+    const sourceItems = prev[sourceColumn];
+    const sourceIndex = sourceItems.findIndex(
+      (task, index) => getTaskDndId(task, sourceColumn, index) === activeIdValue
+    );
+    if (sourceIndex < 0) return null;
+
+    const moved = sourceItems[sourceIndex];
+    const firestoreId = moved?.id;
+    const next = stripMatchingTasksFromAllColumns(prev, activeIdValue, firestoreId);
+    const targetItems = [...next[targetColumn]];
+    const overIndex = isColumnOrEmptyDropTarget(overId)
+      ? targetItems.length
+      : targetItems.findIndex(
+          (task, index) => getTaskDndId(task, targetColumn, index) === overId
+        );
+    const insertIndex = overIndex < 0 ? targetItems.length : overIndex;
+    targetItems.splice(insertIndex, 0, moved);
+    next[targetColumn] = targetItems;
+    return sanitizeKanbanTaskColumnsState(next);
+  }
+
+  if (
+    allowSameColumn &&
+    activeIdValue !== overId &&
+    !isColumnOrEmptyDropTarget(overId)
+  ) {
+    const items = [...prev[sourceColumn]];
+    const oldIndex = items.findIndex(
+      (task, index) => getTaskDndId(task, sourceColumn, index) === activeIdValue
+    );
+    const newIndex = items.findIndex(
+      (task, index) => getTaskDndId(task, sourceColumn, index) === overId
+    );
+    if (oldIndex < 0 || newIndex < 0) return null;
+    return sanitizeKanbanTaskColumnsState({
+      ...prev,
+      [sourceColumn]: arrayMove(items, oldIndex, newIndex),
+    });
+  }
+
+  return null;
 }
 
 /**
@@ -181,7 +235,11 @@ export function useKanbanDnD(
   onPersistSuccess
 ) {
   const [activeId, setActiveId] = useState(null);
+  const tasksByColumnRef = useRef(tasksByColumn);
+  const dragSnapshotRef = useRef(null);
   const persistMutation = usePersistKanbanMutation();
+
+  tasksByColumnRef.current = tasksByColumn;
 
   const findTaskById = useCallback(
     (taskId) => {
@@ -193,131 +251,95 @@ export function useKanbanDnD(
     [tasksByColumn]
   );
 
+  const clearDragSession = useCallback(() => {
+    setActiveId(null);
+    dragSnapshotRef.current = null;
+  }, []);
+
+  const restoreDragSnapshot = useCallback(() => {
+    const snapshot = dragSnapshotRef.current;
+    if (snapshot) {
+      setTasksByColumn(snapshot);
+    }
+  }, [setTasksByColumn]);
+
   const handleDragStart = useCallback(({ active }) => {
+    dragSnapshotRef.current = cloneKanbanColumnsState(tasksByColumnRef.current);
     setActiveId(active?.id ?? null);
   }, []);
 
-  const handleDragOver = useCallback(
-    ({ active, over }) => {
-      if (!over) return;
-      const activeIdValue = String(active.id);
-      const overId = String(over.id);
+  /**
+   * Không mutate tasksByColumn khi dragOver — đổi SortableContext items lúc đang kéo
+   * gây vòng measureRect (Maximum update depth) của @dnd-kit.
+   * Preview: DragOverlay; thả cột: applyDragMove trong handleDragEnd.
+   */
+  const handleDragOver = useCallback(() => {}, []);
 
-      setTasksByColumn((prev) => {
-        const resolveContainer = (tid) => findContainerByTaskIdInState(tid, prev);
-        const sourceColumn = resolveContainer(activeIdValue);
-        const targetColumn = resolveColumnFromOverId(overId, resolveContainer);
-        if (!sourceColumn || !targetColumn || sourceColumn === targetColumn) {
-          return prev;
-        }
-
-        const sourceItems = prev[sourceColumn];
-        const sourceIndex = sourceItems.findIndex(
-          (task, index) => getTaskDndId(task, sourceColumn, index) === activeIdValue
-        );
-        if (sourceIndex < 0) return prev;
-
-        const moved = sourceItems[sourceIndex];
-        const firestoreId = moved?.id;
-
-        const next = stripMatchingTasksFromAllColumns(prev, activeIdValue, firestoreId);
-        const targetItems = [...next[targetColumn]];
-        const overIndex = isColumnOrEmptyDropTarget(overId)
-          ? targetItems.length
-          : targetItems.findIndex(
-              (task, index) => getTaskDndId(task, targetColumn, index) === overId
-            );
-        const insertIndex = overIndex < 0 ? targetItems.length : overIndex;
-        targetItems.splice(insertIndex, 0, moved);
-        next[targetColumn] = targetItems;
-        return sanitizeKanbanTaskColumnsState(next);
-      });
-    },
-    [setTasksByColumn]
-  );
+  const handleDragCancel = useCallback(() => {
+    restoreDragSnapshot();
+    setActiveId(null);
+    dragSnapshotRef.current = null;
+  }, [restoreDragSnapshot]);
 
   const handleDragEnd = useCallback(
     async ({ active, over }) => {
       if (!over) {
+        restoreDragSnapshot();
         setActiveId(null);
+        dragSnapshotRef.current = null;
         return;
       }
 
       const activeIdValue = String(active.id);
       const overId = String(over.id);
+      const snapshot = dragSnapshotRef.current;
 
       let nextTasksByColumn = null;
 
       setTasksByColumn((prev) => {
-        const resolveContainer = (tid) => findContainerByTaskIdInState(tid, prev);
-        const sourceColumn = resolveContainer(activeIdValue);
-        const targetColumn = resolveColumnFromOverId(overId, resolveContainer);
-
-        let out = prev;
-
-        if (!sourceColumn || !targetColumn) {
-          out = prev;
-        } else if (sourceColumn !== targetColumn) {
-          const sourceItems = prev[sourceColumn];
-          const oldIndex = sourceItems.findIndex(
-            (task, index) => getTaskDndId(task, sourceColumn, index) === activeIdValue
-          );
-          if (oldIndex < 0) {
-            out = prev;
-          } else {
-            const moved = sourceItems[oldIndex];
-            const firestoreId = moved?.id;
-            const next = stripMatchingTasksFromAllColumns(prev, activeIdValue, firestoreId);
-            const targetItems = [...next[targetColumn]];
-            const overIndex = isColumnOrEmptyDropTarget(overId)
-              ? targetItems.length
-              : targetItems.findIndex(
-                  (task, index) => getTaskDndId(task, targetColumn, index) === overId
-                );
-            const insertIndex = overIndex < 0 ? targetItems.length : overIndex;
-            targetItems.splice(insertIndex, 0, moved);
-            next[targetColumn] = targetItems;
-            out = next;
-          }
-        } else if (activeIdValue !== overId && !isColumnOrEmptyDropTarget(overId)) {
-          const items = [...prev[sourceColumn]];
-          const oldIndex = items.findIndex(
-            (task, index) => getTaskDndId(task, sourceColumn, index) === activeIdValue
-          );
-          const newIndex = items.findIndex(
-            (task, index) => getTaskDndId(task, sourceColumn, index) === overId
-          );
-          if (oldIndex >= 0 && newIndex >= 0) {
-            const nextItems = arrayMove(items, oldIndex, newIndex);
-            out = {
-              ...prev,
-              [sourceColumn]: nextItems,
-            };
-          }
-        }
-
-        const sanitized = sanitizeKanbanTaskColumnsState(out);
-        nextTasksByColumn = sanitized;
-        return sanitized;
+        const base = dragSnapshotRef.current ?? prev;
+        const moved = applyDragMove(base, activeIdValue, overId, { allowSameColumn: true });
+        const next = moved ?? base;
+        nextTasksByColumn = sanitizeKanbanTaskColumnsState(next);
+        return nextTasksByColumn;
       });
 
+      if (!snapshot || !nextTasksByColumn) {
+        clearDragSession();
+        return;
+      }
+
+      const updates = getKanbanDragPersistUpdates(
+        snapshot,
+        nextTasksByColumn,
+        KANBAN_PERSIST_MAPS
+      );
+
+      if (updates.length === 0) {
+        clearDragSession();
+        return;
+      }
+
       try {
-        if (nextTasksByColumn) {
-          await persistMutation.mutateAsync({
-            columnKeys: COLUMN_KEYS,
-            tasksByColumn: nextTasksByColumn,
-            persistColumnOrders,
-          });
-          await onPersistSuccess?.();
-        }
+        await persistMutation.mutateAsync({ updates });
+        dragSnapshotRef.current = cloneKanbanColumnsState(nextTasksByColumn);
+        await onPersistSuccess?.();
       } catch (err) {
         console.error("Failed to persist drag updates:", err);
+        restoreDragSnapshot();
         await refreshBoardTasks();
       } finally {
-        setActiveId(null);
+        clearDragSession();
       }
     },
-    [setTasksByColumn, refreshBoardTasks, onPersistSuccess, persistMutation]
+    [
+      setTasksByColumn,
+      refreshBoardTasks,
+      onPersistSuccess,
+      persistMutation,
+      restoreDragSnapshot,
+      clearDragSession,
+    ]
   );
 
   return {
@@ -325,6 +347,7 @@ export function useKanbanDnD(
     handleDragStart,
     handleDragOver,
     handleDragEnd,
+    handleDragCancel,
     findTaskById,
   };
 }
