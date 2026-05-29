@@ -1,17 +1,17 @@
-import { currentUserProfileQueryKeyRoot } from "../hooks/useCurrentUserProfile.js";
-import { allUsersQueryKeyRoot } from "../hooks/useAllUsers.js";
 import { auth } from "../services/firebase.js";
+import { getKanbanInitialLoadQueryOptions } from "../hooks/useKanbanTasks.js";
 import {
-  kanbanInitialLoadQueryKeyRoot,
-  kanbanRefreshQueryKeyRoot,
-  getKanbanInitialLoadQueryOptions,
-} from "../hooks/useKanbanTasks.js";
+  allUsers,
+  currentUserProfile,
+  kanbanInitialLoad,
+  kanbanRefresh,
+} from "../queryKeys.js";
 
 const AUTH_SESSION_QUERY_ROOTS = [
-  currentUserProfileQueryKeyRoot,
-  allUsersQueryKeyRoot,
-  kanbanInitialLoadQueryKeyRoot,
-  kanbanRefreshQueryKeyRoot,
+  currentUserProfile,
+  allUsers,
+  kanbanInitialLoad,
+  kanbanRefresh,
 ];
 
 /**
@@ -32,7 +32,7 @@ export function clearAuthSessionQueries(queryClient) {
  * @param {import("@tanstack/react-query").QueryClient} queryClient
  */
 export async function prepareQueriesAfterLogin(queryClient) {
-  await queryClient.invalidateQueries({ queryKey: currentUserProfileQueryKeyRoot });
+  await queryClient.invalidateQueries({ queryKey: currentUserProfile });
   const uid = auth.currentUser?.uid;
   if (uid) {
     await queryClient.prefetchQuery(getKanbanInitialLoadQueryOptions(uid));

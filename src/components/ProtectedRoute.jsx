@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useFirebaseAuth } from "../hooks/useFirebaseAuth.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export function AuthLoading() {
   return (
@@ -14,7 +14,7 @@ export function AuthLoading() {
  */
 export default function ProtectedRoute({ children }) {
   const location = useLocation();
-  const { user, ready } = useFirebaseAuth();
+  const { user, ready } = useAuth();
 
   if (!ready) {
     return <AuthLoading />;

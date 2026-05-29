@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
 import App from "./App.jsx";
+import { AuthProvider } from "./context/AuthContext.jsx";
 import { BrowserRouter } from "react-router-dom";
 import { queryClient } from "./queryClient.js";
 import { getSavedStartPath } from "./components/UserSetting/StartPage.jsx";
@@ -30,7 +31,9 @@ if (syncStartPageOnFullReload()) {
     <StrictMode>
       <BrowserRouter>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </QueryClientProvider>
       </BrowserRouter>
     </StrictMode>

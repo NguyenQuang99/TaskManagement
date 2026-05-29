@@ -2,14 +2,12 @@ import { useCallback, useLayoutEffect, useEffect, useRef, useState } from "react
 import { onAuthStateChanged } from "firebase/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { auth, getTasksByColumn, getTasksByColumnPage } from "../services/firebase.js";
+import { kanbanInitialLoadKey, kanbanRefresh } from "../queryKeys.js";
 import {
   COLUMN_KEYS,
   COLUMN_TO_FIREBASE,
   sanitizeKanbanTaskColumnsState,
 } from "./useKanbanDnD.js";
-
-export const kanbanInitialLoadQueryKeyRoot = ["kanbanTasks", "initialLoad"];
-export const kanbanRefreshQueryKeyRoot = ["kanbanTasks", "refreshAll"];
 
 function initialColumnPagination() {
   return COLUMN_KEYS.reduce((acc, key) => {
@@ -70,7 +68,7 @@ const EMPTY_TASKS_BY_COLUMN = {
 /** Query key + options theo uid — tránh cache kanban dùng chung giữa user A/B. */
 export function getKanbanInitialLoadQueryOptions(authUid) {
   return {
-    queryKey: [...kanbanInitialLoadQueryKeyRoot, authUid || "anonymous"],
+    queryKey: kanbanInitialLoadKey(authUid),
     queryFn: fetchKanbanInitialLoad,
     staleTime: 30 * 1000,
     enabled: !!authUid,
@@ -209,7 +207,7 @@ export function useKanbanTasks() {
   const refreshBoardTasks = useCallback(async () => {
     try {
       const fullTasks = await queryClient.fetchQuery({
-        queryKey: kanbanRefreshQueryKeyRoot,
+        queryKey: kanbanRefresh,
         queryFn: fetchAllColumnsFull,
         staleTime: 0,
       });

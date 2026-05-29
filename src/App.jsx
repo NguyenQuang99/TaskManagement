@@ -5,10 +5,10 @@ import KanbanBoard from "./pages/KanbanBoard.jsx";
 import Profile from "./pages/Profile.jsx";
 import ProtectedRoute, { AuthLoading } from "./components/ProtectedRoute.jsx";
 import { getSavedStartPath } from "./components/UserSetting/StartPage.jsx";
-import { useFirebaseAuth } from "./hooks/useFirebaseAuth.js";
+import { useAuth } from "./context/AuthContext.jsx";
 
 function RootRoute() {
-  const { user, ready } = useFirebaseAuth();
+  const { user, ready } = useAuth();
 
   if (!ready) {
     return <AuthLoading />;

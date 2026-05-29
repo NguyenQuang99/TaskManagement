@@ -20,10 +20,8 @@ import {
   useKanbanDnD,
 } from "../hooks/useKanbanDnD.js";
 import { useTaskSearch } from "../hooks/useTaskSearch.js";
-import {
-  kanbanInitialLoadQueryKeyRoot,
-  useKanbanTasks,
-} from "../hooks/useKanbanTasks.js";
+import { kanbanInitialLoad } from "../queryKeys.js";
+import { useKanbanTasks } from "../hooks/useKanbanTasks.js";
 import { useCreateTaskMutation, useUpdateTaskMutation } from "../hooks/useTaskMutations.js";
 
 function parseAssigneeKeysFromSearchParams(searchParams) {
@@ -236,7 +234,7 @@ export default function KanbanBoard() {
   const createTaskMutation = useCreateTaskMutation();
   const updateTaskMutation = useUpdateTaskMutation();
   const syncKanbanTaskQueries = useCallback(async () => {
-    await queryClient.refetchQueries({ queryKey: kanbanInitialLoadQueryKeyRoot, type: "active" });
+    await queryClient.refetchQueries({ queryKey: kanbanInitialLoad, type: "active" });
   }, [queryClient]);
 
   const toggleAssigneeFilterChip = useCallback((key) => {

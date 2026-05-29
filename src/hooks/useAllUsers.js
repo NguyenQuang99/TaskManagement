@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getAllUsers } from "../services/firebase.js";
+import { allUsers } from "../queryKeys.js";
 
 /**
  * Tải toàn bộ user từ Firestore (`getAllUsers`).
@@ -11,11 +12,9 @@ import { getAllUsers } from "../services/firebase.js";
  *   refetch: () => Promise<unknown>;
  * }}
  */
-export const allUsersQueryKeyRoot = ["allUsers"];
-
 export function useAllUsers() {
   const { data, isLoading, error, refetch, isError } = useQuery({
-    queryKey: allUsersQueryKeyRoot,
+    queryKey: allUsers,
     queryFn: async () => {
       const list = await getAllUsers();
       return Array.isArray(list) ? list : [];

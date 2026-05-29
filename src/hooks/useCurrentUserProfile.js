@@ -1,12 +1,7 @@
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
 import { useQuery } from "@tanstack/react-query";
-import { auth, getCurrentUserProfile } from "../services/firebase.js";
-
-/**
- * Dùng với `invalidateQueries` sau mutation (cập nhật profile, v.v.).
- */
-export const currentUserProfileQueryKeyRoot = ["currentUserProfile"];
+import { getCurrentUserProfile } from "../services/firebase.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { currentUserProfileKey } from "../queryKeys.js";
 
 /**
  * Profile Firestore của user đang đăng nhập — cache TanStack Query.
@@ -19,19 +14,10 @@ export const currentUserProfileQueryKeyRoot = ["currentUserProfile"];
  * }}
  */
 export function useCurrentUserProfile() {
-  const [authUid, setAuthUid] = useState(() => auth.currentUser?.uid ?? "");
-  const [authReady, setAuthReady] = useState(false);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setAuthUid(u?.uid ?? "");
-      setAuthReady(true);
-    });
-    return () => unsub();
-  }, []);
+  const { uid: authUid, ready: authReady } = useAuth();
 
   const { data, isLoading, error, refetch, isError } = useQuery({
-    queryKey: [...currentUserProfileQueryKeyRoot, authUid || "anonymous"],
+    queryKey: currentUserProfileKey(authUid),
     queryFn: () => getCurrentUserProfile(),
     enabled: authReady && !!authUid,
     staleTime: 60 * 1000,

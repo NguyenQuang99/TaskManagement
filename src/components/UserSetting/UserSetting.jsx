@@ -7,8 +7,7 @@ import {
     updateCurrentUserProfile,
 } from "../../services/firebase";
 import ConfirmLogoutPopup from "../ConfirmLogoutPopup";
-import { currentUserProfileQueryKeyRoot } from "../../hooks/useCurrentUserProfile.js";
-import { allUsersQueryKeyRoot } from "../../hooks/useAllUsers.js";
+import { allUsers, currentUserProfile } from "../../queryKeys.js";
 import { COLUMN_TO_FIREBASE } from "../../hooks/useKanbanDnD.js";
 
 export default function UserSetting({ avatarUrl, initialProfile }) {
@@ -91,8 +90,8 @@ export default function UserSetting({ avatarUrl, initialProfile }) {
             avatar: avatarUrl,
             Email: email
         });
-        await queryClient.invalidateQueries({ queryKey: currentUserProfileQueryKeyRoot });
-        await queryClient.invalidateQueries({ queryKey: allUsersQueryKeyRoot });
+        await queryClient.invalidateQueries({ queryKey: currentUserProfile });
+        await queryClient.invalidateQueries({ queryKey: allUsers });
     }
     return (
         <>
@@ -103,8 +102,8 @@ export default function UserSetting({ avatarUrl, initialProfile }) {
                     onOk={async () => {
                         try {
                             await deleteCurrentUserAccount();
-                            await queryClient.invalidateQueries({ queryKey: currentUserProfileQueryKeyRoot });
-                            queryClient.removeQueries({ queryKey: allUsersQueryKeyRoot });
+                            await queryClient.invalidateQueries({ queryKey: currentUserProfile });
+                            queryClient.removeQueries({ queryKey: allUsers });
                         } finally {
                             setConfirmDeleteAccount(false);
                             navigate("/");
