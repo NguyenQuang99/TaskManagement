@@ -112,11 +112,21 @@ export default function CustomFiltersPanel({
     onRemoveAssigneeChip?.(key);
   }, [onRemoveAssigneeChip]);
 
-  const { users, loading: usersLoading } = useAllUsers();
+  const {
+    users,
+    loading: usersLoading,
+    usersLoadFailed,
+    refetch: refetchUsers,
+  } = useAllUsers();
+
+  const safeUsers = users ?? [];
 
   const tasksFlat = useMemo(() => flattenTasksByColumn(tasksByColumn), [tasksByColumn]);
 
-  const knownUserIds = useMemo(() => users.map((u) => u.id).filter(Boolean), [users]);
+  const knownUserIds = useMemo(
+    () => safeUsers.map((u) => u?.id).filter(Boolean),
+    [safeUsers]
+  );
 
   const { byUser, unassigned } = useMemo(
     () => buildAssigneeCounts(tasksFlat, knownUserIds),
@@ -124,10 +134,11 @@ export default function CustomFiltersPanel({
   );
 
   const usersSorted = useMemo(() => {
-    return [...users].sort((a, b) =>
+    if (usersLoadFailed) return [];
+    return [...safeUsers].sort((a, b) =>
       displayUserName(a).toLowerCase().localeCompare(displayUserName(b).toLowerCase())
     );
-  }, [users]);
+  }, [safeUsers, usersLoadFailed]);
 
   const assigneeListLoading = usersLoading;
 
@@ -220,6 +231,21 @@ export default function CustomFiltersPanel({
                 <div className="px-3 py-2 text-[11px] text-red-600">Could not load tasks for counts.</div>
               ) : (
                 <>
+                  {usersLoadFailed ? (
+                    <div
+                      className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900"
+                      role="alert"
+                    >
+                      <span>Không tải danh sách user</span>
+                      <button
+                        type="button"
+                        onClick={() => refetchUsers()}
+                        className="shrink-0 font-semibold text-amber-950 underline-offset-2 hover:underline"
+                      >
+                        Thử lại
+                      </button>
+                    </div>
+                  ) : null}
                   <AssigneeFilterRow
                     name="Unassigned"
                     avatarUrl=""

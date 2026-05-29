@@ -18,7 +18,7 @@ function SlidersIcon({ className }) {
 }
 
 export default function Header() {
-  const { user, loading } = useCurrentUserProfile();
+  const { user, loading, errorMessage, refetch } = useCurrentUserProfile();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const isKanbanPage = location.pathname === "/kanban";
@@ -38,6 +38,22 @@ export default function Header() {
   }, [filtersHidden, searchParams, setSearchParams]);
 
   return (
+    <>
+    {errorMessage ? (
+      <div
+        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-800 sm:px-6"
+        role="alert"
+      >
+        <span>{errorMessage}</span>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="shrink-0 font-semibold text-rose-900 underline-offset-2 hover:underline"
+        >
+          Retry
+        </button>
+      </div>
+    ) : null}
     <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 sm:px-6">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {isKanbanPage ? (
@@ -108,5 +124,6 @@ export default function Header() {
         </div>
       </div>
     </header>
+    </>
   )
 }

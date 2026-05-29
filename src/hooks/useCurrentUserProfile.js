@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "../services/firebase.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { currentUserProfileKey } from "../queryKeys.js";
+import { mapFirebaseError } from "../utils/mapFirebaseError.js";
 
 /**
  * Profile Firestore của user đang đăng nhập — cache TanStack Query.
@@ -10,6 +11,7 @@ import { currentUserProfileKey } from "../queryKeys.js";
  *   user: null | (Record<string, unknown> & { id: string });
  *   loading: boolean;
  *   error: null | Error;
+ *   errorMessage: null | string;
  *   refetch: () => Promise<unknown>;
  * }}
  */
@@ -23,10 +25,17 @@ export function useCurrentUserProfile() {
     staleTime: 60 * 1000,
   });
 
+  const normalizedError = isError
+    ? error instanceof Error
+      ? error
+      : new Error(String(error))
+    : null;
+
   return {
     user: data ?? null,
     loading: !authReady || (authReady && !!authUid && isLoading),
-    error: isError ? (error instanceof Error ? error : new Error(String(error))) : null,
+    error: normalizedError,
+    errorMessage: normalizedError ? mapFirebaseError(normalizedError) : null,
     refetch,
   };
 }

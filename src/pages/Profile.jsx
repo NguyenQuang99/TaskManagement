@@ -10,7 +10,7 @@ import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile.js";
 export default function Profile() {
   const location = useLocation();
   const [currentPage, setCurrentPage] = useState((location.state && location.state.highlight) ?  location.state.highlight : "User settings");
-  const { user, loading, error, refetch } = useCurrentUserProfile();
+  const { user, loading, errorMessage, refetch } = useCurrentUserProfile();
   const [avatarOverride, setAvatarOverride] = useState(null);
   const avatarUrl = avatarOverride || user?.avatar || null;
   let page = null;
@@ -75,9 +75,9 @@ export default function Profile() {
               <p className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
                 Loading profile…
               </p>
-            ) : error ? (
+            ) : errorMessage ? (
               <div className="rounded-xl border border-rose-200 bg-white p-8 text-center">
-                <p className="text-sm text-rose-700">Could not load profile.</p>
+                <p className="text-sm text-rose-700" role="alert">{errorMessage}</p>
                 <button
                   type="button"
                   onClick={() => refetch()}

@@ -27,6 +27,7 @@ import {
   filterTasksByColumnForAssigneeKeys,
   parseAssigneeKeysFromSearchParams,
 } from "../lib/kanbanAssigneeFilter.js";
+import { mapFirebaseError } from "../utils/mapFirebaseError.js";
 
 const AVATAR_COLORS = [
   "bg-gradient-to-br from-sky-500 to-blue-600",
@@ -49,7 +50,7 @@ function getAssigneeAvatarUrl(task, users) {
 }
 
 function getInitials(task, users) {
-  const u = users ? getAssigneeUser(task, users) : null;
+  const u = Array.isArray(users) ? getAssigneeUser(task, users) : null;
   const fromProfile = u?.FullName || u?.UserName || u?.Email;
   const source =
     fromProfile ||
@@ -215,6 +216,7 @@ export default function KanbanBoard() {
     kanbanInitialPending,
     kanbanInitialRetrying,
     kanbanInitialLoadFailed,
+    kanbanInitialLoadError,
   } = useKanbanTasks();
   const [searchParams, setSearchParams] = useSearchParams();
   const [taskModal, setTaskModal] = useState(null);
@@ -222,12 +224,21 @@ export default function KanbanBoard() {
     () => parseAssigneeKeysFromSearchParams(searchParams),
     [searchParams]
   );
+
+  const kanbanLoadErrorMessage = useMemo(
+    () =>
+      kanbanInitialLoadFailed
+        ? mapFirebaseError(kanbanInitialLoadError)
+        : null,
+    [kanbanInitialLoadFailed, kanbanInitialLoadError]
+  );
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
     })
   );
-  const { users } = useAllUsers();
+  const { users: allUsersList } = useAllUsers();
+  const users = allUsersList ?? [];
   const createTaskMutation = useCreateTaskMutation();
   const updateTaskMutation = useUpdateTaskMutation();
   const syncKanbanTaskQueries = useCallback(async () => {
@@ -282,11 +293,14 @@ export default function KanbanBoard() {
     [assigneeKeysFromSearchParams]
   );
 
-  const knownUserIds = useMemo(() => new Set(users.map((u) => u.id).filter(Boolean)), [users]);
+  const knownUserIds = useMemo(
+    () => new Set(users.map((u) => u?.id).filter(Boolean)),
+    [users]
+  );
 
   const userNameById = useMemo(() => {
     const map = new Map();
-    users.forEach((u) => {
+    (users ?? []).forEach((u) => {
       const label = (u?.UserName || u?.FullName || u?.Email || u?.id || "").toString().trim();
       if (u?.id && label) map.set(u.id, label);
     });
@@ -454,7 +468,7 @@ export default function KanbanBoard() {
                 className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
                 role="alert"
               >
-                <p className="font-medium">Could not load the task board. Please try again.</p>
+                <p className="font-medium">{kanbanLoadErrorMessage}</p>
                 <button
                   type="button"
                   onClick={handleKanbanLoadRetry}

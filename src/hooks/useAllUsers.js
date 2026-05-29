@@ -9,6 +9,7 @@ import { allUsers } from "../queryKeys.js";
  *   users: Array<Record<string, unknown> & { id: string }>;
  *   loading: boolean;
  *   error: null | Error;
+ *   usersLoadFailed: boolean;
  *   refetch: () => Promise<unknown>;
  * }}
  */
@@ -22,10 +23,17 @@ export function useAllUsers() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const normalizedError = isError
+    ? error instanceof Error
+      ? error
+      : new Error(String(error))
+    : null;
+
   return {
-    users: data ?? [],
+    users: Array.isArray(data) ? data : [],
     loading: isLoading,
-    error: isError ? (error instanceof Error ? error : new Error(String(error))) : null,
+    error: normalizedError,
+    usersLoadFailed: Boolean(normalizedError),
     refetch,
   };
 }

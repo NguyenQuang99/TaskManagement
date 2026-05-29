@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate } from "react-router-dom"
 import { login as signIn, loginWithGoogle } from "../services/firebase"
 import { prepareQueriesAfterLogin } from "../lib/authQueryCache.js"
+import { mapFirebaseError } from "../utils/mapFirebaseError.js"
 
 export default function LoginPage() {
 
@@ -11,28 +12,35 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showEmptyError, setShowEmptyError] = useState(false);
+  const [authError, setAuthError] = useState("");
+
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setShowEmptyError(true);
+      setAuthError("");
       return;
     }
 
     setShowEmptyError(false);
+    setAuthError("");
     try {
       await signIn(email, password);
       await prepareQueriesAfterLogin(queryClient);
       navigate("/kanban");
     } catch (err) {
-      console.error(err.code, err.message);
+      console.error(err?.code, err?.message);
+      setAuthError(mapFirebaseError(err));
     }
   }
   const handleLoginWidthGoogle = async () => {
+    setAuthError("");
     try {
       await loginWithGoogle();
       await prepareQueriesAfterLogin(queryClient);
       navigate("/kanban");
     } catch (err) {
-      console.error(err.code, err.message);
+      console.error(err?.code, err?.message);
+      setAuthError(mapFirebaseError(err));
     }
   }
   return (
@@ -57,6 +65,7 @@ export default function LoginPage() {
               onChange={(e)=> {
                 setEmail(e.target.value);
                 if (showEmptyError) setShowEmptyError(false);
+                if (authError) setAuthError("");
               }}
               placeholder="you@example.com"
               className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-100"
@@ -76,6 +85,7 @@ export default function LoginPage() {
               onChange={(e)=> {
                 setPassword(e.target.value);
                 if (showEmptyError) setShowEmptyError(false);
+                if (authError) setAuthError("");
               }}
               placeholder="••••••••"
               className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-100"
@@ -85,6 +95,12 @@ export default function LoginPage() {
           {showEmptyError ? (
             <p className="text-sm font-medium text-red-600" role="alert">
               Please enter email and password.
+            </p>
+          ) : null}
+
+          {authError ? (
+            <p className="text-sm font-medium text-red-600" role="alert">
+              {authError}
             </p>
           ) : null}
 

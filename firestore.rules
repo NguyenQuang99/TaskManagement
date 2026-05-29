@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users/{userId} — document id = Firebase Auth uid
+    match /Users/{userId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // Tasks/{taskId} — shared board read; writes only by assignee (userId)
+    match /Tasks/{taskId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}

@@ -156,6 +156,7 @@ export function useKanbanTasks() {
 
   const {
     data: initialLoadData,
+    error: initialLoadError,
     isError: initialLoadFailed,
     isPending: kanbanQueryPending,
     isFetching: kanbanInitialFetching,
@@ -263,5 +264,6 @@ export function useKanbanTasks() {
     kanbanInitialPending,
     kanbanInitialRetrying,
     kanbanInitialLoadFailed: initialLoadFailed,
+    kanbanInitialLoadError: initialLoadFailed ? initialLoadError : null,
   };
 }

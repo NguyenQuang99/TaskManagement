@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "Tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "columnId", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

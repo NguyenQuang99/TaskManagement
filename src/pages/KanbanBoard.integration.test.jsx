@@ -42,6 +42,7 @@ const { MOCK_TASK_TITLE, mockKanbanTasksReturn } = vi.hoisted(() => {
       kanbanInitialPending: false,
       kanbanInitialRetrying: false,
       kanbanInitialLoadFailed: false,
+      kanbanInitialLoadError: null,
     },
   };
 });
@@ -80,6 +81,7 @@ vi.mock("../hooks/useAllUsers.js", () => ({
     users: [],
     loading: false,
     error: null,
+    usersLoadFailed: false,
     refetch: vi.fn(),
   })),
 }));
