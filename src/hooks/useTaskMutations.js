@@ -78,6 +78,20 @@ export function getKanbanDragPersistUpdates(snapshot, nextTasksByColumn, maps) {
 }
 
 /**
+ * Task id cần gọi updateTask sau drag (delta columnId / order).
+ *
+ * @param {Record<string, unknown[]>} snapshot
+ * @param {Record<string, unknown[]>} nextTasksByColumn
+ * @param {Parameters<typeof getKanbanDragPersistUpdates>[2]} maps
+ * @returns {string[]}
+ */
+export function getKanbanDragPersistTaskIds(snapshot, nextTasksByColumn, maps) {
+  return getKanbanDragPersistUpdates(snapshot, nextTasksByColumn, maps).map(
+    ({ taskId }) => taskId
+  );
+}
+
+/**
  * Gọi updateTask tuần tự theo danh sách delta từ getKanbanDragPersistUpdates.
  *
  * @returns {import("@tanstack/react-query").UseMutationResult<

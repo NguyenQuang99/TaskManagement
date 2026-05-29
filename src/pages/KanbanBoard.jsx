@@ -23,13 +23,10 @@ import { useTaskSearch } from "../hooks/useTaskSearch.js";
 import { kanbanInitialLoad } from "../queryKeys.js";
 import { useKanbanTasks } from "../hooks/useKanbanTasks.js";
 import { useCreateTaskMutation, useUpdateTaskMutation } from "../hooks/useTaskMutations.js";
-
-function parseAssigneeKeysFromSearchParams(searchParams) {
-  return (searchParams.get("assignees") ?? "")
-    .split(",")
-    .map((key) => key.trim())
-    .filter(Boolean);
-}
+import {
+  filterTasksByColumnForAssigneeKeys,
+  parseAssigneeKeysFromSearchParams,
+} from "../lib/kanbanAssigneeFilter.js";
 
 const AVATAR_COLORS = [
   "bg-gradient-to-br from-sky-500 to-blue-600",
@@ -306,24 +303,16 @@ export default function KanbanBoard() {
     [assigneeKeysFromSearchParams, userNameById]
   );
 
-  const displayTasksByColumn = useMemo(() => {
-    if (selectedAssigneeKeys.size === 0) return filteredTasksByColumn;
-
-    const includeUnassigned = selectedAssigneeKeys.has(ASSIGNEE_CHIP_KEY_UNASSIGNED);
-    const out = {};
-
-    COLUMN_KEYS.forEach((columnKey) => {
-      out[columnKey] = (filteredTasksByColumn[columnKey] ?? []).filter((task) => {
-        const rawUserId = typeof task?.userId === "string" ? task.userId.trim() : "";
-        const hasKnownAssignee = Boolean(rawUserId) && knownUserIds.has(rawUserId);
-
-        if (hasKnownAssignee) return selectedAssigneeKeys.has(rawUserId);
-        return includeUnassigned;
-      });
-    });
-
-    return out;
-  }, [filteredTasksByColumn, knownUserIds, selectedAssigneeKeys]);
+  const displayTasksByColumn = useMemo(
+    () =>
+      filterTasksByColumnForAssigneeKeys(
+        filteredTasksByColumn,
+        selectedAssigneeKeys,
+        knownUserIds,
+        COLUMN_KEYS
+      ),
+    [filteredTasksByColumn, knownUserIds, selectedAssigneeKeys]
+  );
 
   const counts = useMemo(
     () => ({
