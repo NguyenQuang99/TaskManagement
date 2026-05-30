@@ -11,7 +11,6 @@
 | | |
 |---|---|
 | **Live demo** | task-management-h20vnnizg-kanban3.vercel.app |
-| **Repository** | _[Thêm link GitHub]_ |
 
 | # | Tên file | Khi chụp | Caption (README) |
 |---|----------|----------|----------------|
