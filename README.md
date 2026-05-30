@@ -13,10 +13,14 @@
 | **Live demo** | task-management-h20vnnizg-kanban3.vercel.app |
 | **Repository** | _[Thêm link GitHub]_ |
 
-| Kanban board | Login |
-|:---:|:---:|
-| ![Kanban board](./docs/screenshots/screenshot-kanban.png) | ![Login](./docs/screenshots/screenshot-login.png) |
-| `/kanban` — 4 cột, filter, search | `/` — email + Google |
+| # | Tên file | Khi chụp | Caption (README) |
+|---|----------|----------|----------------|
+| 1 | ![Login](./docs/screenshots/screenshot-login.png) | Trang Sign in, trước khi bấm Login | **Đăng nhập** — Email/password và Google (Firebase Auth). |
+| 2 | ![Kanban](./docs/screenshots/screenshot-kanban.png) | `/kanban` load xong, 4 cột + Custom filters | **Kanban board** — Bốn cột task, skeleton/load-more và panel lọc assignee. |
+| 3 | ![Create Task](./docs/screenshots/screenshot-create-task.png) | Modal tạo task, form đã điền | **Tạo task** — Modal gán title, mô tả và assignee; lưu collection `Tasks`. |
+| 4 | ![Drap Task](./docs/screenshots/screenshot-drag.mp4) | Đang kéo hoặc vừa thả sang cột khác | **Kéo thả** — Đổi cột / thứ tự với @dnd-kit; persist delta lên Firestore. |
+| 5 | ![Filter Task](./docs/screenshots/screenshot-filter.png) | Chip assignee hoặc search đang active | **Lọc & tìm kiếm** — Filter `?assignees=` và search `?q=` trên header. |
+| 6 | ![Profile](./docs/screenshots/screenshot-profile.png) | `/profile` — User Settings | **Hồ sơ user** — Cập nhật profile `Users/{uid}` (tên, avatar). |
 
 ---
 

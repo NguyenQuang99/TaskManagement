@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showEmptyError, setShowEmptyError] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [authPending, setAuthPending] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -23,6 +24,7 @@ export default function LoginPage() {
 
     setShowEmptyError(false);
     setAuthError("");
+    setAuthPending(true);
     try {
       await signIn(email, password);
       await prepareQueriesAfterLogin(queryClient);
@@ -30,10 +32,13 @@ export default function LoginPage() {
     } catch (err) {
       console.error(err?.code, err?.message);
       setAuthError(mapFirebaseError(err));
+    } finally {
+      setAuthPending(false);
     }
   }
   const handleLoginWidthGoogle = async () => {
     setAuthError("");
+    setAuthPending(true);
     try {
       await loginWithGoogle();
       await prepareQueriesAfterLogin(queryClient);
@@ -41,6 +46,8 @@ export default function LoginPage() {
     } catch (err) {
       console.error(err?.code, err?.message);
       setAuthError(mapFirebaseError(err));
+    } finally {
+      setAuthPending(false);
     }
   }
   return (
@@ -51,7 +58,7 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-slate-500">Welcome back. Enter your details below.</p>
         </div>
 
-        <form className="space-y-5" action="#" method="post">
+        <form className="space-y-5" action="#" method="post" aria-busy={authPending}>
           <div className="space-y-2">
             <label htmlFor="login-email" className="text-sm font-medium text-slate-700">
               Email
@@ -107,9 +114,11 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={handleLogin}
-            className="h-11 w-full rounded-lg bg-indigo-600 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            disabled={authPending}
+            aria-busy={authPending}
+            className="h-11 w-full rounded-lg bg-indigo-600 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Login
+            {authPending ? "Signing in…" : "Login"}
           </button>
         </form>
 
@@ -127,6 +136,7 @@ export default function LoginPage() {
             type="button"
             className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
             aria-label="Sign in with Google"
+            disabled={authPending}
             onClick={handleLoginWidthGoogle}
           >
             <svg className="h-6 w-6" viewBox="0 0 24 24" aria-hidden>

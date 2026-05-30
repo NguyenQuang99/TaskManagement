@@ -241,6 +241,10 @@ export default function KanbanBoard() {
   const users = allUsersList ?? [];
   const createTaskMutation = useCreateTaskMutation();
   const updateTaskMutation = useUpdateTaskMutation();
+  const taskMutating = createTaskMutation.isPending || updateTaskMutation.isPending;
+  const openCreateTask = () => {
+    if (!taskMutating) setTaskModal({ mode: "create" });
+  };
   const syncKanbanTaskQueries = useCallback(async () => {
     await queryClient.refetchQueries({ queryKey: kanbanInitialLoad, type: "active" });
   }, [queryClient]);
@@ -468,7 +472,7 @@ export default function KanbanBoard() {
                 className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
                 role="alert"
               >
-                <p className="font-medium">{kanbanLoadErrorMessage}</p>
+                <p className="text-sm font-medium text-red-600">{kanbanLoadErrorMessage}</p>
                 <button
                   type="button"
                   onClick={handleKanbanLoadRetry}
@@ -481,6 +485,8 @@ export default function KanbanBoard() {
             ) : null}
           <DndContext
             sensors={sensors}
+            aria-busy={kanbanInitialPending || taskMutating}
+            aria-label={kanbanInitialPending ? "Loading task board" : "Task board"}
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
@@ -495,7 +501,7 @@ export default function KanbanBoard() {
               headerTextClass="text-slate-800"
               badgeBgClass="bg-[#3b82f6]/20"
               badgeTextClass="text-slate-700"
-              onAddTask={() => setTaskModal({ mode: "create" })}
+              onAddTask={openCreateTask}
               droppableRef={setTodoDropRef}
               lazyLoadEnabled
               hasMoreTasks={columnPagination.todo.hasMore}
@@ -603,6 +609,7 @@ export default function KanbanBoard() {
           mode={taskModal.mode}
           task={taskModal.mode === "edit" ? taskModal.task : null}
           users={users}
+          savePending={taskMutating}
           onCancel={() => setTaskModal(null)}
           onDeleteSuccess={async () => {
             await syncKanbanTaskQueries();

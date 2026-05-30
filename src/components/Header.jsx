@@ -18,7 +18,7 @@ function SlidersIcon({ className }) {
 }
 
 export default function Header() {
-  const { user, loading, errorMessage, refetch } = useCurrentUserProfile();
+  const { user, loading, errorMessage, isRefetching, refetch } = useCurrentUserProfile();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const isKanbanPage = location.pathname === "/kanban";
@@ -41,16 +41,17 @@ export default function Header() {
     <>
     {errorMessage ? (
       <div
-        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2 text-xs text-rose-800 sm:px-6"
+        className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-600 sm:px-6"
         role="alert"
       >
-        <span>{errorMessage}</span>
+        <span className="font-medium">{errorMessage}</span>
         <button
           type="button"
           onClick={() => refetch()}
-          className="shrink-0 font-semibold text-rose-900 underline-offset-2 hover:underline"
+          disabled={isRefetching}
+          className="shrink-0 font-semibold text-red-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Retry
+          {isRefetching ? "Retrying…" : "Retry"}
         </button>
       </div>
     ) : null}
@@ -97,9 +98,16 @@ export default function Header() {
         </div>
       </div>
       <div className="group relative">
-        <button type="button" className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-white">
+        <button
+          type="button"
+          className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-white"
+          aria-label={loading ? "Loading profile" : "User menu"}
+        >
           {loading ? (
-            <span className="flex h-full w-full items-center justify-center bg-slate-200 text-[10px] text-slate-500">
+            <span
+              className="flex h-full w-full items-center justify-center bg-slate-200 text-[10px] text-slate-500"
+              aria-hidden
+            >
               …
             </span>
           ) : user?.avatar ? (

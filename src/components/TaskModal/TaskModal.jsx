@@ -8,6 +8,7 @@ export default function TaskModal({
   onSave = undefined,
   onCancel = undefined,
   onDeleteSuccess = undefined,
+  savePending = false,
 }) {
   const heading = mode === "edit" ? "Edit Task" : "Create Task"
   const formKey = mode === "edit" && task?.id ? task.id : "create"
@@ -130,9 +131,11 @@ export default function TaskModal({
             <button
               type="submit"
               form="task-modal-form"
-              className="h-11 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500"
+              disabled={savePending}
+              aria-busy={savePending}
+              className="h-11 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Save
+              {savePending ? "Saving…" : "Save"}
             </button>
           </div>
         </div>

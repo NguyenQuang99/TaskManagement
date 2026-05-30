@@ -18,7 +18,7 @@ import { mapFirebaseError } from "../utils/mapFirebaseError.js";
 export function useCurrentUserProfile() {
   const { uid: authUid, ready: authReady } = useAuth();
 
-  const { data, isLoading, error, refetch, isError } = useQuery({
+  const { data, isLoading, isFetching, error, refetch, isError } = useQuery({
     queryKey: currentUserProfileKey(authUid),
     queryFn: () => getCurrentUserProfile(),
     enabled: authReady && !!authUid,
@@ -36,6 +36,7 @@ export function useCurrentUserProfile() {
     loading: !authReady || (authReady && !!authUid && isLoading),
     error: normalizedError,
     errorMessage: normalizedError ? mapFirebaseError(normalizedError) : null,
+    isRefetching: isFetching && !!authUid && !isLoading,
     refetch,
   };
 }
