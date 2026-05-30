@@ -23,6 +23,13 @@
 
 ---
 
+## Account Demo
+
+Email: admin@test.com
+Password: Pass123
+
+---
+
 ## Tech stack
 
 | Layer | Công nghệ |
